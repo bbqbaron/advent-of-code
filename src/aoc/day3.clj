@@ -10,18 +10,9 @@
 
 (defn most-common-bits []
   (for
-   [[zs os]
-    (reduce
-     (fn [acc bitcounts]
-       (map
-        (partial map +)
-        acc
-        bitcounts))
-     (repeat 12 [0 0])
-     (map
-      (partial map
-               #(case % 0 [1 0] 1 [0 1]))
-      (input)))]
+   [freq
+    (map frequencies (apply map vector (input)))
+    :let [zs (freq 0) os (freq 1)]]
     (if (> zs os) 0 1)))
 
 (defn encode [x]

@@ -51,20 +51,16 @@
 
 (defn normal-number [most-or-least tie-winner og-trie]
   (letfn [(most-common-entry [trie]
-            (let [sorter (comp (case most-or-least :most - :least identity)
-                               first)]
-              (->> trie
-                   (group-by (comp :ct second))
-                   (sort-by sorter)
-                   first
-                   second)))
+                             (let [options (map (juxt first (comp :ct second)) trie)
+                                   bit (if (apply = (map second options))
+                                         tie-winner
+                                         (first 
+                                          ((case most-or-least :most last first)
+                                           (sort-by second options))))]
+                               [bit (trie bit)]))
           (step [trie bits]
-            (let [[winner tie :as results]
+            (let [[bit {:keys [ct children]}]
                   (most-common-entry trie)
-                  [bit {:keys [ct children]}]
-                  (if tie
-                    (first (filter (comp #{tie-winner} first) results))
-                    winner)
                   newnum (conj bits bit)]
               (case ct
                 1 (into newnum (extract-only children))

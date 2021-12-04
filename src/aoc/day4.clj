@@ -13,9 +13,9 @@
 
 (defn parse-board [lns]
   (to-victory-paths
-   (mapv
+   (map
     (comp
-     (partial mapv
+     (partial map
               #(Integer/parseInt %))
      (partial remove str/blank?)
      #(str/split % #"\s+"))

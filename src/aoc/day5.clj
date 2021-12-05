@@ -22,10 +22,7 @@
   (take
    (apply max (map (comp inc #(Math/abs %) (partial apply -)) dims))
    (apply map vector
-          (map (comp
-                (partial apply concat)
-                repeat
-                pt-range)
+          (map (comp cycle pt-range)
                dims))))
 
 (defn diagonal? [dims]
@@ -43,8 +40,7 @@
        io/resource
        slurp
        str/split-lines
-       (map
-        read-dimensions)))
+       (map read-dimensions)))
 
 (defn part1 []
   (->> (input "5.txt")
@@ -56,5 +52,4 @@
 
 (comment
   (part1)
-  (part2)
-  )
+  (part2))

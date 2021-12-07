@@ -11,41 +11,30 @@
        slurp
        str/split-lines)))
 
-;; naive approach; how far can we get?
+(defn binary-search
+  [distance->cost ps]
+  (let [freqs (frequencies ps)]
+    (letfn [(point->cost [point]
+              (reduce
+               +
+               (map
+                (fn [[point2 n]]
+                  (let [distance (Math/abs (- point point2))]
+                    (* n (distance->cost distance))))
+                freqs)))
+            (step [left right]
+              (if (= left right)
+                (point->cost left)
+                (let [left2 (+ left (int (* (max 0 (- right left)) 0.5)))
+                      right2 (inc left2)
+                      [left-cost right-cost] (map point->cost [left2 right2])]
+                  (if (< left-cost right-cost)
+                    (recur left left2)
+                    (recur right2 right)))))]
+      (step 0 (reduce max ps)))))
 
-(defn positions->costs [distance->cost ps]
-  (let [[left right] ((juxt first last) (sort ps))
-        freqs (frequencies ps)]
-    (map
-     (fn [point]
-       [point (map
-           (fn [[point2 n]]
-             (let [distance (Math/abs (- point point2))]
-               [point2 (* n (distance->cost distance))]))
-           freqs)])
-     (range left (inc right)))))
-
-(defn node-cost [cs] (reduce + (map second cs)))
-
-(defn costs->winner [costs]
-  (second
-   (first
-    (sort-by
-     second
-     (map
-      #(update % 1 node-cost) 
-      costs)))))
-
-(defn part1 [file]
-  (costs->winner (positions->costs identity (input file))))
-
-(defn part2 [file]
-  (costs->winner (positions->costs #(* % (inc %) 0.5) (input file))))
+(defn summed [x] (* x (inc x) 0.5))
 
 (comment
-  (part1 "7sample.txt")
-  (part2 "7sample.txt")
-  ;; this runs for like 10 seconds; ehhhhhhhhhh
-  (part1 "7.txt")
-  (part2 "7.txt")
-  )
+  (binary-search identity (input "7sample.txt"))
+  (binary-search summed (input "7.txt")))

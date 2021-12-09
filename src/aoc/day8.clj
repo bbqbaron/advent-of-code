@@ -1,6 +1,4 @@
 (ns aoc.day8
-  "I hate this entire solution. I feel like an idiot. 
-   Watch this be a two-liner when done correctly."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.edn :as edn]
@@ -26,7 +24,7 @@
        (map (comp
              (partial map
                       (comp
-                       (partial map (partial map (comp keyword str)))
+                       (partial map (comp set (partial map (comp keyword str))))
                        (partial remove str/blank?)
                        #(str/split % #"\s+")))
              #(str/split % #"\|")))))
@@ -34,71 +32,22 @@
 (defn- encode
   [s] (ffirst (filter (comp #{s} second) segments)))
 
-(defn- unique-partitions
-  "I have no idea what this algo is supposed to be called."
-  [input]
-  (letfn [(go [seen [x & xs]] (if (seq xs)
-                                (for [o (remove seen x)
-                                      sub (go (conj seen o) xs)]
-                                  (cons o sub))
-                                (map list (remove seen x))))]
-    (go #{} input)))
-
-(def possible-digits
-  (reduce (partial merge-with set/union)
-          (for [[i u] segments]
-            {(count u) #{i}})))
-
-(def all-segments (sort (set (reduce concat (vals segments)))))
-
-(defn- fuck-it [states signal]
-  (letfn [(process-digit [state segment-options digit-option]
-                         (let [for-digit (map
-                                          (fnil (partial set/intersection digit-option)
-                                                digit-option)
-                                          segment-options)]
-                           (when (every? not-empty for-digit)
-                             (let [segment-facts (->
-                                                  (into state (map vector signal for-digit))
-                                                  (map all-segments)
-                                                  ;; soul leaving my body.
-                                                  ;; smash face on keyboard, make computer
-                                                  ;; do math thingy.
-                                                  unique-partitions)
-                                   refined-state (map
-                                                  (comp (partial into {}) (partial map vector all-segments)
-                                                        (partial map hash-set))
-                                                  segment-facts)
-                                   new-facts (reduce
-                                              (partial merge-with set/union)
-                                              refined-state)]
-                               new-facts))))
-          (run-state [state]
-                     (let [digit-options (map segments (possible-digits (count signal)))
-                           segment-options (map state signal)]
-                       (filter seq
-                               (map (partial process-digit state segment-options)
-                                    digit-options))))]
-    (mapcat run-state states)))
-
 (comment
-  (reduce +
-          (map
-           (comp clojure.edn/read-string
-                 ;; lol, whatever
-                 #(str/replace % #"^0+" "")
-                 (partial apply str))
-           (for [[clues answer] (input "8.txt")]
-             (let [init (into {}
-                              (map
-                               vector
-                               all-segments
-                               (repeat (set all-segments))))                   
-                   solved (into {}
-                                (map
-                                 #(update % 1 first)
-                                 (first
-                                  (reduce fuck-it [init] clues))))]
-               (map
-                (comp encode set (partial map solved))
-                answer))))))
+  (reduce + (for [[clues numbers] (input "8.txt")
+                  :let [by-length (group-by count clues)
+                        [cf seven four] (map first (map by-length (range 2 5)))
+                        a (set/difference seven cf)
+                        bd (set/difference four cf)
+                        fives (reduce set/intersection (by-length 5))
+                        g (set/difference fives a bd)
+                        c (set/difference cf (reduce set/intersection (by-length 6)))
+                        f (set/difference cf c)
+                        d (set/difference fives a g)
+                        b (set/difference bd d)
+                        e (set/difference (first (by-length 7)) a b c d f g)
+                        mapping (into {}
+                                      (map #(update % 0 first)
+                                           {a :a b :b c :c d :d e :e f :f g :g}))]]
+              (clojure.edn/read-string (apply str (drop-while zero? (map
+                                                                     (comp encode set (partial map mapping))
+                                                                     numbers)))))))

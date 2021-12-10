@@ -5,16 +5,16 @@
             [clojure.set :as set]))
 
 (def segments
-  (into {} (map-indexed vector [#{:a :b :c :e :f :g}
-                                #{:c :f}
-                                #{:a :c :d :e :g}
-                                #{:a :c :d :f :g}
-                                #{:b :c :d :f}
-                                #{:a :b :d :f :g}
-                                #{:a :b :d :e :f :g}
-                                #{:a :c :f}
-                                #{:a :b :c :d :e :f :g}
-                                #{:a :b :c :d :f :g}])))
+  [#{:a :b :c :e :f :g}
+   #{:c :f}
+   #{:a :c :d :e :g}
+   #{:a :c :d :f :g}
+   #{:b :c :d :f}
+   #{:a :b :d :f :g}
+   #{:a :b :d :e :f :g}
+   #{:a :c :f}
+   #{:a :b :c :d :e :f :g}
+   #{:a :b :c :d :f :g}])
 
 (defn- input [file]
   (->> file
@@ -30,24 +30,40 @@
              #(str/split % #"\|")))))
 
 (defn- encode
-  [s] (ffirst (filter (comp #{s} second) segments)))
+  [s] (ffirst (filter (comp #{s} second) (map-indexed vector segments))))
+
+(defn by-counts [signals]
+  (->> signals
+       (group-by count)
+       (map #(update % 1 (partial reduce set/intersection)))
+       (mapcat (fn [[idx xs]] (map (partial vector idx) xs)))
+       (reduce (fn [acc [idx x]] (update acc x (fnil conj #{}) idx)) {})       
+       (map (comp vec reverse))
+       (into {})))
+
+(def segment-counts (by-counts segments))
+
+(defn to-canonical [[clues numbers]]
+  (let [mapping (as-> clues $
+                  (by-counts $)
+                  (merge-with vector $ segment-counts)
+                  (vals $)
+                  (into {} $))]
+    (map
+     (comp set (partial map mapping))
+     numbers)))
 
 (comment
-  (reduce + (for [[clues numbers] (input "8.txt")
-                  :let [by-length (group-by count clues)
-                        [cf seven four] (map first (map by-length (range 2 5)))
-                        a (set/difference seven cf)
-                        bd (set/difference four cf)
-                        fives (reduce set/intersection (by-length 5))
-                        g (set/difference fives a bd)
-                        c (set/difference cf (reduce set/intersection (by-length 6)))
-                        f (set/difference cf c)
-                        d (set/difference fives a g)
-                        b (set/difference bd d)
-                        e (set/difference (first (by-length 7)) a b c d f g)
-                        mapping (into {}
-                                      (map #(update % 0 first)
-                                           {a :a b :b c :c d :d e :e f :f g :g}))]]
-              (clojure.edn/read-string (apply str (drop-while zero? (map
-                                                                     (comp encode set (partial map mapping))
-                                                                     numbers)))))))
+  ;; part 1
+  (reduce + 
+          (map
+           #(count (keep (set (map segments [1 4 7 8]))
+                         (to-canonical %)))
+           (input "8.txt")))
+  ;; part 2
+  (reduce + (map
+             #(clojure.edn/read-string
+               (apply str (drop-while zero? (map
+                                             encode
+                                             (to-canonical %)))))
+             (input "8.txt"))))

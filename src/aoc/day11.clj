@@ -36,13 +36,15 @@
    {:flashes 0 :octopuses octopuses}))
 
 (defn first-synchronized [octopuses]
-  (inc
-   (first
-    (keep
-     (fn [[i [x y]]] (when (= 100 (- y x)) i))
-     (map-indexed vector
-                  (partition 2 1
-                             (map :flashes (run octopuses))))))))
+  (->> octopuses
+       run
+       (map :flashes)
+       (partition 2 1)
+       (map-indexed vector)
+       (keep
+        (fn [[i [x y]]] (when (= 100 (- y x)) i)))
+       first
+       inc))
 
 (defn get-octopuses [file] (into {}
                                  (let [input (input file)]

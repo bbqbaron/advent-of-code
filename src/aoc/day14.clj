@@ -23,15 +23,15 @@
    (cons [(last template) 1]
          (map #(update % 0 first) cts))))
 
-(defn less-naive [[template rules]]
-  (let [implications (into {}
-                           (for [[[a c :as left] b] rules]
-                             [left [[a b] [b c]]]))]
+(defn polymerizations [[template rules]]
+  (let [substitutions (into {}
+                            (for [[[a c :as left] b] rules]
+                              [left [[a b] [b c]]]))]
     (letfn [(step [pairs]
                   (sums
                    (mapcat
                     (fn [[chunk ct]]
-                      (map #(do [% ct]) (implications chunk)))
+                      (map #(do [% ct]) (substitutions chunk)))
                     pairs)))]
       (iterate
        step
@@ -49,4 +49,4 @@
     (calculate
      (resolve-counts
       template
-      (nth (less-naive input) 40)))))
+      (nth (polymerizations input) 40)))))

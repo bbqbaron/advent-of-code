@@ -2,7 +2,8 @@
   "Holy heck, part 2 must have run for 2 minutes straight."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.edn :as edn]))
+            [clojure.edn :as edn]
+            [clojure.set :as set]))
 
 (defn parse [f]
   (mapv
@@ -11,7 +12,7 @@
     (slurp (io/resource f)))))
 
 (defn get-neighbors [size [py px]]
-  (for [x (range -1 2) y (range -1 2)
+  (for [x (range 1 -2 -1) y (range 1 -2 -1)
         :when (and (some #(not= % 0) [x y])
                    (some zero? [x y]))
         :let [x2 (+ px x) y2 (+ py y)]
@@ -20,7 +21,7 @@
                (<= 0 y2 (dec size)))]
     [y2 x2]))
 
-(defn cost-of [sq from current]
+(defn tally-path [sq from current]
   (->>
    ((fn go [p]
       (if-let [p2 (from p)]
@@ -37,37 +38,26 @@
   "Shameless direct functionalization of imperative a*" 
   [[row :as sq] start end]
   (let [dim (count row)
-        cost (partial get-in sq)
-        get-g (fn [s p] (or (s p) ##Inf))]
+        current-path-cost (fn [s p] (or (s p) ##Inf))]
     (loop [open #{start}
            from {}
-           gscore {start 0}
-           fscore {start (cost start)}]      
+           cost-to {start 0}]
       (if (seq open)
-        (let [current (->> open (sort-by fscore) first)]
+        (let [current (->> open (sort-by cost-to) first)]
           (if (= current end)
-            (cost-of sq from current)
-            (let [{:keys [open from gscore fscore]}
-                  (reduce
-                   (fn reduce-state [{:keys [gscore] :as acc} neighbor]
-                     (let [tentative (reduce + 0
-                                             (filter some?
-                                                     [(get-g gscore current) (cost neighbor)]))]
-                       (if (some->> (get-g gscore neighbor) (< tentative))
-                         (-> acc
-                             (update :from assoc neighbor current)
-                             (update :gscore assoc neighbor tentative)
-                             (update :fscore assoc neighbor
-                                     (reduce + 0 (filter some? [tentative (cost neighbor)])))
-                             (update :open conj neighbor))
-                         acc)))
-                   {:from from
-                    :gscore gscore
-                    :fscore fscore
-                    :open (disj open current)}
-                   (get-neighbors dim current))]
+            (tally-path sq from current)
+            (let [goto (->> current (get-neighbors dim)
+                            (keep
+                             (fn [neighbor]
+                               (let [path-cost (+ (current-path-cost cost-to current)
+                                                  (get-in sq neighbor))]
+                                 (when (< path-cost (current-path-cost cost-to neighbor))
+                                   [neighbor path-cost]))))
+                            (into {}))]              
               (recur
-               open from gscore fscore))))
+               (reduce conj (disj open current) (keys goto))
+               (into from (map #(vector % current) (keys goto)))
+               (merge cost-to goto)))))
         ::failed))))
 
 (defn lolol-quintuplize [sq]

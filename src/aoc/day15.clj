@@ -2,8 +2,7 @@
   "Holy heck, part 2 must have run for 2 minutes straight."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.edn :as edn]
-            [clojure.set :as set]))
+            [clojure.edn :as edn]))
 
 (defn parse [f]
   (mapv
@@ -12,7 +11,7 @@
     (slurp (io/resource f)))))
 
 (defn get-neighbors [size [py px]]
-  (for [x (range 1 -2 -1) y (range 1 -2 -1)
+  (for [x (range 1 -1 -1) y (range 1 -1 -1)
         :when (and (some #(not= % 0) [x y])
                    (some zero? [x y]))
         :let [x2 (+ px x) y2 (+ py y)]

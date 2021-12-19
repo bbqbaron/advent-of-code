@@ -9,115 +9,114 @@
 (defn prn-it [pref s]
   #_(prn pref (encode s)))
 
-(defn cmp-keys [k k2]
+(defn compare-lists [k k2]
   (or
    (first (drop-while zero? (map compare k k2)))
    0))
 
-(defn pad-k [n d] (vec (take n (concat d (repeat 0)))))
+(defn pad-key [depth key] (vec (take depth (concat key (repeat nil)))))
 
-(defn dmax [s]
+(defn depth-max [state]
   (reduce max
           (map
            count
-           (keys s))))
+           (keys state))))
 
-(defn read-state [p]
-  (let [d ((fn go [d p]
-             (if (sequential? p)
-               (reduce
-                concat
-                (map-indexed
-                 (fn [i x] (go (conj d (inc i)) x))
-                 p))
-               [[d p]]))
-           [] p)]
-    (into {} d)))
+(defn read-state [pairs]
+  (into {} ((fn go [d p]
+              (if (sequential? p)
+                (reduce
+                 concat
+                 (map-indexed
+                  (fn [i x] (go (conj d i) x))
+                  p))
+                [[d p]]))
+            [] pairs)))
 
-(defn pair [s k]
-  (let [ks (map
-            (pt conj (vec (butlast k)))
-            [1 2])
-        p (filter second (map (juxt identity s) ks))]
-    (when (= 2 (count p))
-      p)))
+(defn pair [state key]
+  (let [partner-keys (map
+                      (pt conj (vec (butlast key)))
+                      [0 1])
+        found (filter second (map (juxt identity state) partner-keys))]
+    (when (= 2 (count found))
+      found)))
 
-(defn deep-keys [s]
-  (->> s keys
-       (filter
-        #(>= (count %) 5))))
+(defn deep-keys [state]
+  (->> state 
+       keys
+       (filter #(>= (count %) 5))))
 
-(defn has-pair? [s k]
-  (let [p (pair s k)]
+(defn has-pair? [state key]
+  (let [p (pair state key)]
     (when (= (count p) 2)
-      [k p])))
+      [key p])))
 
-(defn deeps [s]
+(defn exploding-keys [state]
   (tf/p ::deeps
-        (->> s
+        (->> state
              deep-keys
-             (keep (pt has-pair? s))
-             (sort-by first cmp-keys))))
+             (keep (pt has-pair? state))
+             (sort-by first compare-lists))))
 
-(defn left [s k]
+(defn left-of [state key]
   (tf/p ::left
-        (->> s
+        (->> state
              keys
-             (filter (comp pos? (pt cmp-keys k)))
-             (sort cmp-keys)
+             (filter (comp pos? (pt compare-lists key)))
+             (sort compare-lists)
              last)))
 
-(defn right [s k]
+(defn right-of [state key]
   (tf/p ::right
-        (->> s
+        (->> state
              keys
-             (filter (comp neg? (pt cmp-keys k)))
-             (sort cmp-keys)
+             (filter (comp neg? (pt compare-lists key)))
+             (sort compare-lists)
              first)))
 
-(defn splode [s]
+(defn explode [state]
   (tf/p ::splode
-        (when-let [ds (seq (deeps s))]
-          (loop [[[dk [[lk] [rk]]] & des] ds
+        (when-let [ks (seq (exploding-keys state))]
+          (loop [[[key [[left-key] [right-key]]] & more] ks
                  seen #{}
-                 s s]
+                 s state]
             (cond
-              (not dk)
+              (not key)
               s
-              (seen dk)
-              (recur des seen s)
+              (seen key)
+              (recur more seen s)
               :else
               (recur
-               des
-               (conj seen dk lk rk)
-               (let [l (s lk) r (s rk)
-                     ll (left s lk)
-                     rr (right s rk)]
+               more
+               (conj seen key left-key right-key)
+               (let [left-val (s left-key) right-val (s right-key)
+                     left-left (left-of s left-key)
+                     right-right (right-of s right-key)]
                  (cond->
                   (-> s
-                      (dissoc lk rk)
-                      (assoc (vec (butlast dk)) 0))
-                   ll (update ll + l)
-                   rr (update rr + r)))))))))
+                      (dissoc left-key right-key)
+                      (assoc (vec (butlast key)) 0))
+                   left-left (update left-left + left-val)
+                   right-right (update right-right + right-val)))))))))
 
-(defn zplit [s]
-  (tf/p ::zplit
-        (when-let [[k v] (->> s
+(defn split-large [state]
+  (tf/p ::split
+        (when-let [[k v] (->> state
                               (filter (comp (pt <= 10) second))
                               (sort-by
                                first
-                               cmp-keys)
+                               compare-lists)
                               first)]
-          (-> s
+          (-> state
               (dissoc k)
-              (assoc (conj (vec k) 1) (int (Math/floor (/ v 2))))
-              (assoc (conj (vec k) 2) (int (Math/ceil (/ v 2))))))))
+              (assoc (conj (vec k) 0) (int (Math/floor (/ v 2))))
+              (assoc (conj (vec k) 1) (int (Math/ceil (/ v 2))))))))
 
 (defn check [s]
   (tf/p ::check
         (or
-         (splode s)
-         (zplit s)
+         (explode s)
+         (split-large s)
          s)))
 
 (defn run [s]
@@ -131,14 +130,16 @@
   (into {}
         (for [[i s] (map-indexed vector [s1 s2])
               [k v] s]
-          [(into [(inc i)] k) v])))
+          [(into [i] k) v])))
 
-(defn encode [s]
-  (letfn [(asv [ve [k & ks] v]
+(defn encode 
+  "Just debugging"
+  [state]
+  (letfn [(assoc-vec [target [k & ks] v]
             (if (seq ks)
-              (update (or ve [nil nil]) (dec k) asv ks v)
-              (assoc (or ve [nil nil]) (dec k) v)))]
-    (reduce #(asv %1 (remove zero? (first %2)) (second %2)) nil s)))
+              (update (or target [nil nil]) k assoc-vec ks v)
+              (assoc (or target [nil nil]) k v)))]
+    (reduce #(assoc-vec %1 (first %2) (second %2)) nil state)))
 
 (defn add [s1 s2]
   (prn-it "a      " s1)
@@ -150,8 +151,8 @@
 (defn magnitude [s]
   (reduce +
           (for [[k v] s]
-            (reduce * v (map #(case % 1 3 2 2 1)
-                             (pad-k (dmax s) k))))))
+            (reduce * v (map #(case % 0 3 1 2 1)
+                             (pad-key (depth-max s) k))))))
 
 (defn run-case [xs]
   ((juxt magnitude encode)

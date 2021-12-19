@@ -22,11 +22,6 @@
            count
            (keys s))))
 
-(defn ek [d k]
-  (reduce + (map-indexed (fn [i v]
-                           (* v (Math/pow 3 i)))
-                         (reverse (pad-k d k)))))
-
 (defn read-state [p]
   (let [d ((fn go [d p]
              (if (sequential? p)
@@ -49,7 +44,6 @@
 
 (defn deep-keys [s]
   (->> s keys
-       (sort cmp-keys)
        (filter
         #(>= (count %) 5))))
 
@@ -58,65 +52,73 @@
     (when (= (count p) 2)
       [k p])))
 
-(defn deep? [s]
-  (->> s
-       deep-keys
-       (some (pt has-pair? s))))
+(defn deeps [s]
+  (tf/p ::deeps
+        (->> s
+             deep-keys
+             (keep (pt has-pair? s))
+             (sort-by first cmp-keys))))
 
 (defn left [s k]
-  (let [dm (dmax s)
-        nk (ek dm k)]
-    (->> s
-         keys
-         (filter (comp (pt > nk) (pt ek dm)))
-         (sort cmp-keys)
-         last)))
+  (tf/p ::left
+        (->> s
+             keys
+             (filter (comp pos? (pt cmp-keys k)))
+             (sort cmp-keys)
+             last)))
 
 (defn right [s k]
-  (let [dm (dmax s)
-        nk (ek dm k)]
-    (->> s
-         keys
-         (filter (comp (pt < nk) (pt ek dm)))
-         (sort cmp-keys)
-         first)))
+  (tf/p ::right
+        (->> s
+             keys
+             (filter (comp neg? (pt cmp-keys k)))
+             (sort cmp-keys)
+             first)))
 
 (defn splode [s]
-  (if-let [[dk [[lk l] [rk r]]] (deep? s)]
-    (let [ll (left s lk)
-          rr (right s rk)]
-      (cond->
-       (-> s
-           (dissoc lk rk)
-           (assoc (vec (butlast dk)) 0))
-        ll (update ll + l)
-        rr (update rr + r)))
-    s))
+  (tf/p ::splode
+        (when-let [ds (seq (deeps s))]
+          (loop [[[dk [[lk] [rk]]] & des] ds
+                 seen #{}
+                 s s]
+            (cond
+              (not dk)
+              s
+              (seen dk)
+              (recur des seen s)
+              :else
+              (recur
+               des
+               (conj seen dk lk rk)
+               (let [l (s lk) r (s rk)
+                     ll (left s lk)
+                     rr (right s rk)]
+                 (cond->
+                  (-> s
+                      (dissoc lk rk)
+                      (assoc (vec (butlast dk)) 0))
+                   ll (update ll + l)
+                   rr (update rr + r)))))))))
 
 (defn zplit [s]
-  (if-let [[k v] (first (filter (comp (pt <= 10) second)
-                                (sort-by
-                                 first
-                                 cmp-keys
-                                 s)))]
-    (-> s
-        (dissoc k)
-        (assoc (conj (vec k) 1) (int (Math/floor (/ v 2))))
-        (assoc (conj (vec k) 2) (int (Math/ceil (/ v 2)))))
-    s))
+  (tf/p ::zplit
+        (when-let [[k v] (->> s
+                              (filter (comp (pt <= 10) second))
+                              (sort-by
+                               first
+                               cmp-keys)
+                              first)]
+          (-> s
+              (dissoc k)
+              (assoc (conj (vec k) 1) (int (Math/floor (/ v 2))))
+              (assoc (conj (vec k) 2) (int (Math/ceil (/ v 2))))))))
 
 (defn check [s]
-  (let [s2 (splode s)]
-    (if (= s s2)
-      (let [s3 (zplit s)]
-        (if (not= s s3)
-          (do
-            (prn-it "split  " s)
-            s3)
-          s))
-      (do
-        (prn-it "explode" s2)
-        s2))))
+  (tf/p ::check
+        (or
+         (splode s)
+         (zplit s)
+         s)))
 
 (defn run [s]
   (second
@@ -156,3 +158,17 @@
    (reduce add (map read-state xs))))
 
 (def input (map edn/read-string (str/split-lines (slurp (io/resource "18")))))
+
+(tf/add-basic-println-handler! {})
+(comment
+  (tf/profile {}
+              (assert
+               (= 3725 (first (run-case input)))))
+
+  (tf/profile {}
+              (assert 
+               (= 4832 
+                  (reduce max
+                        (for [x input
+                              y (remove (pt = x) input)]
+                          (first (run-case [x y]))))))))
